@@ -1,0 +1,113 @@
+name: Rspec
+on: push
+
+jobs:
+#  robot-test:
+#    runs-on: robotimage
+#    refer to the robot working dir
+#    refer to the robot report dir
+#    and try this in parallel ...
+
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:alpine
+        ports: ["6379:6379"]
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.6.2
+        ports: ["9200:9200"]
+        options: -e="discovery.type=single-node"
+
+      postgres:
+        image: postgres:12.2
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_DB: ampdevelopment_test
+          POSTGRES_PASSWORD: ampdevelopment
+          POSTGRES_USER: ampdevelopment
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Ruby 3.0.3
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.0.3
+
+      - name: Cache Ruby gems
+        uses: actions/cache@v1
+        with:
+          path: vendor/bundle
+          key: ${{ runner.os }}-gem-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gem-
+      - name: Bundle gems
+        run: |
+          bundle config path vendor/bundle
+          bundle config set without 'production staging development'
+          bundle config --local build.sassc --disable-march-tune-native
+          bundle install --jobs 4 --retry 3
+      # - name: Lint with RuboCop
+      #   run: bundle exec rubocop --parallel
+
+      - name: Get yarn cache
+        id: yarn-cache
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+
+      - uses: actions/cache@v1
+        with:
+          path: ${{ steps.yarn-cache.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+      - name: Install Node modules
+        run: yarn install --frozen-lockfile
+
+      - name: Run Tests
+        run: |
+          bundle exec rake db:create db:schema:load
+          bundle exec rake spec
+          bundle exec rspec spec
+        env:
+          APP_NAME: ccp
+          RAILS_ENV: test
+          RAILS_MAX_THREADS: 5
+          DB_NAME: ampdevelopment_test
+          DB_USER: ampdevelopment
+          DB_PWD: ampdevelopment
+          DB_HOST: localhost
+          OKTA_CLIENT_ID: client
+          OKTA_CLIENT_SECRET: secret
+          OKTA_ORG: 3md
+          OKTA_DOMAIN: 3md
+          OKTA_URL: https://3md.okta.com
+          OKTA_ISSUER: https://3md.okta.com/oauth2/default
+          OKTA_AUTH_SERVER_ID: default
+          OKTA_REDIRECT_URI: http://localhost:3000/users/auth/oktaoauth/callback
+          ELK_HOST: search-denaliai-swdev-es0001-zlf7cn5jy4bqq6tthkl6lvuq5q.us-east-1.es.amazonaws.com
+          ELK_PORT: 443
+          ELK_SCHEME: https
+          ACS_ENDPOINT: https://stg.camp.t-mobile.com
+        
+          ACS_CLIENT_SSL_CERT: config/DEV_CLIENT_SSL.pem
+          ACS_CLIENT_SSL_PASSWORD: denali2020
+          ACS_BASIC_AUTH_USERNAME: xxx
+          ACS_BASIC_AUTH_PASSWORD: yyy
+          ELK_BASIC_AUTH_USERNAME: aaa
+          ELK_BASIC_AUTH_PASSWORD: bbb
+
+          AWS_ACCESS_KEY_ID: aaakeyaaa
+          AWS_SECRET_ACCESS_KEY: bbbkeybbb
+          AWS_REGION: us-east-1
+          REDIS_URI: redis://127.0.0.1:6379
+          REDIS_URI_WITHOUT_PORT: redis://127.0.0.1
+          REDIS_PORT: 6379
+          REDIS_SERVER: localhost:6379
+          REDIS_LOCATIONS_URI: redis://127.0.0.1:6379
+          REDIS_HOST: localhost
+          GOOGLE_API_KEY: testtesttest
+          KAFKA_HOSTS: "[slug1,slug2]"
+          FEDSEARCHREPO_URL: "http://ec2-54-208-215-97.compute-1.amazonaws.com:8181/api"
